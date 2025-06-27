@@ -1,8 +1,10 @@
-import React from 'react'
-
-const App = () => {
+function App() {
   return (
-    <div className='bg-red-500'>App</div>
+    <>
+      <div className="bg-red-500">
+        hello mom
+      </div>
+    </>
   )
 }
 
