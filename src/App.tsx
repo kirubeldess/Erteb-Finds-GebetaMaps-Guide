@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { GebetaMap, MapMarker, MapPolyline } from "@gebeta/tiles"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { MapPin, Navigation, Loader2, AlertCircle, Crosshair, Map, X } from "lucide-react"
+import { MapPin, Navigation, Loader2, AlertCircle, Crosshair, Map, RefreshCw } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { RouteDisplay } from "@/components/route-display"
 import { Badge } from "@/components/ui/badge"
@@ -42,15 +42,17 @@ export default function ErtebFinder() {
   const [nearestErteb, setNearestErteb] = useState<NearestErteb | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [mapCenter, setMapCenter] = useState<[number, number]>([38.7578, 8.9806]) // Default to Addis Ababa
+  const [mapCenter, setMapCenter] = useState<[number, number]>([38.763611, 9.005401]) // Default center (Addis Ababa)
+  const [mapKey, setMapKey] = useState(0) // Used to force map refresh
   const [routeData, setRouteData] = useState<any>(null)
-  const [watchId, setWatchId] = useState<number | null>(null)
   const [isWatching, setIsWatching] = useState(false)
-  
-  // Manual coordinate entry
-  const [showManualInput, setShowManualInput] = useState(false)
+  const [watchId, setWatchId] = useState<number | null>(null)
   const [manualLat, setManualLat] = useState("")
   const [manualLng, setManualLng] = useState("")
+  const [validDirections, setValidDirections] = useState<[number, number][]>([])
+  
+  // Manual coordinate entry
+  // const [showManualInput, setShowManualInput] = useState(false)
 
   // Calculate distance between two points using Haversine formula
   const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
@@ -237,16 +239,55 @@ export default function ErtebFinder() {
     }
   }, [watchId])
 
+  // Update map when user location changes
+  useEffect(() => {
+    if (userLocation) {
+      // Zoom in closer to user's location for better accuracy
+      setMapCenter([userLocation.lng, userLocation.lat])
+    }
+  }, [userLocation])
+
+  // Ensure map doesn't disappear when route data is loaded
+  useEffect(() => {
+    if (routeData && routeData.direction) {
+      // Small delay to ensure map is ready before updating
+      const timer = setTimeout(() => {
+        // Force map to refresh by slightly adjusting the center
+        const adjustedCenter: [number, number] = [
+          mapCenter[0] + 0.0001, 
+          mapCenter[1] + 0.0001
+        ]
+        setMapCenter(adjustedCenter)
+      }, 500)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [routeData])
+
+  // Debug route data when it changes
+  useEffect(() => {
+    if (routeData && routeData.direction) {
+      console.log("Route data updated:", routeData);
+      console.log("Direction points:", routeData.direction);
+    }
+  }, [routeData]);
+
   // Get directions to nearest erteb
   const getDirections = async () => {
-    if (!userLocation || !nearestErteb) return
+    if (!userLocation || !nearestErteb) {
+      setError("Location data missing")
+      return
+    }
 
     setIsLoading(true)
     setError(null)
+    setRouteData(null)
+    setValidDirections([]) // Clear previous directions
 
     try {
       const apiKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb21wYW55bmFtZSI6IktpcnViZWwiLCJkZXNjcmlwdGlvbiI6IjVkMWY2MjQyLTljNTYtNDE1Yy05ZWNkLWQ5Y2QzYWNlNDNhYyIsImlkIjoiNzdkYmVhZWEtMDJiOC00MGU2LWJhNWUtYWQ0NDQzMzIyMjI3IiwidXNlcm5hbWUiOiJraXJ1YmVsZGVzcyJ9.sDLsuOK3OLX2MEJGc8sBaE1amjeZrWt81iCjbPmf96E'
 
+      // Format: origin=lat,lng&destination=lat,lng (not lng,lat)
       const url = `https://mapapi.gebeta.app/api/route/direction/?origin=${userLocation.lat},${userLocation.lng}&destination=${nearestErteb.location.lat},${nearestErteb.location.lng}&instructions=1&apiKey=${apiKey}`
       
       console.log("Fetching directions from:", url)
@@ -256,18 +297,39 @@ export default function ErtebFinder() {
       
       console.log("Direction API response:", data)
 
-      if (response.ok && data && data.direction) {
+      if (response.ok && data) {
         // Make sure we have the route data in the correct format
-        if (Array.isArray(data.direction) && data.direction.length > 0) {
+        if (data.direction && Array.isArray(data.direction) && data.direction.length > 0) {
           console.log(`Route received with ${data.direction.length} points`)
-          setRouteData(data)
           
-          // Adjust map to show the entire route
-          if (data.direction.length > 0) {
-            // Get the first point of the route
-            const firstPoint = data.direction[0]
-            setMapCenter([firstPoint[0], firstPoint[1]])
+          // Ensure we have valid coordinates and SWAP lat/lng to lng/lat for MapPolyline
+          const validDirections = data.direction
+            .filter((point: any) => 
+              Array.isArray(point) && point.length === 2 && 
+              !isNaN(point[0]) && !isNaN(point[1])
+            )
+            .map((point: [number, number]) => [point[1], point[0]]); // Swap lat/lng to lng/lat
+          
+          console.log("Converted route points:", validDirections);
+          
+          if (validDirections.length < 2) {
+            setError("Not enough valid points in route data");
+            console.error("Invalid route points:", data.direction);
+            setIsLoading(false);
+            return;
           }
+          
+          // Store the valid directions in state
+          setValidDirections(validDirections);
+          
+          // Store the route data
+          setRouteData({
+            ...data,
+            direction: validDirections
+          });
+          
+          // Force map refresh
+          refreshMap();
         } else {
           setError("Invalid route data received")
           console.error("Invalid route data:", data)
@@ -315,13 +377,10 @@ export default function ErtebFinder() {
     setError(null)
   }
 
-  // Update map when user location changes
-  useEffect(() => {
-    if (userLocation) {
-      // Zoom in closer to user's location for better accuracy
-      setMapCenter([userLocation.lng, userLocation.lat])
-    }
-  }, [userLocation])
+  // Function to refresh the map
+  const refreshMap = () => {
+    setMapKey(prev => prev + 1)
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50">
@@ -585,47 +644,77 @@ export default function ErtebFinder() {
           {/* Map */}
           <div className="lg:col-span-2">
             <Card className="h-[600px]">
-              <CardContent className="p-0 h-full">
-                <GebetaMap
-                  apiKey='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb21wYW55bmFtZSI6IktpcnViZWwiLCJkZXNjcmlwdGlvbiI6IjVkMWY2MjQyLTljNTYtNDE1Yy05ZWNkLWQ5Y2QzYWNlNDNhYyIsImlkIjoiNzdkYmVhZWEtMDJiOC00MGU2LWJhNWUtYWQ0NDQzMzIyMjI3IiwidXNlcm5hbWUiOiJraXJ1YmVsZGVzcyJ9.sDLsuOK3OLX2MEJGc8sBaE1amjeZrWt81iCjbPmf96E'
-                  center={mapCenter}
-                  zoom={userLocation ? 15 : 12} // Zoom in closer when user location is available
-                  style="basic"
-                  className="w-full h-full rounded-lg"
-                >
-                  {/* User location marker */}
-                  {userLocation && (
-                    <MapMarker
-                      id="user-location"
-                      lngLat={[userLocation.lng, userLocation.lat]}
-                      color="#3B82F6"
-                      onClick={() => console.log("User location clicked")}
-                    />
+              <CardHeader className="py-2 px-4 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-medium">Map View</CardTitle>
+                <div className="flex items-center space-x-2">
+                  {routeData && (
+                    <Badge variant="outline" className="text-xs">
+                      Route: {(routeData.totalDistance / 1000).toFixed(1)} km
+                    </Badge>
                   )}
-                  
-                  {/* Route polyline - show the route path when directions are available */}
-                  {routeData && routeData.direction && (
-                    <MapPolyline
-                      id="route-path"
-                      coordinates={routeData.direction.map((point: [number, number]) => point)}
-                      color="#EF4444"
-                      width={4}
-                    />
-                  )}
-                  
-                  {/* Erteb location markers */}
-                  {ERTEB_LOCATIONS.map((location) => (
-                    <MapMarker
-                      key={location.id}
-                      id={`erteb-${location.id}`}
-                      lngLat={[location.lng, location.lat]}
-                      color={nearestErteb?.location.id === location.id ? "#10B981" : "#EF4444"}
-                      onClick={() => console.log(`${location.name} clicked`)}
-                    />
-                  ))}
-                </GebetaMap>
-            </CardContent>
-          </Card>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 w-8 p-0" 
+                    onClick={refreshMap}
+                    title="Refresh map"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0 h-[calc(100%-48px)]">
+                <div className="h-full w-full relative">
+                  <GebetaMap
+                    key={mapKey} // Add key to force re-render
+                    apiKey='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb21wYW55bmFtZSI6IktpcnViZWwiLCJkZXNjcmlwdGlvbiI6IjVkMWY2MjQyLTljNTYtNDE1Yy05ZWNkLWQ5Y2QzYWNlNDNhYyIsImlkIjoiNzdkYmVhZWEtMDJiOC00MGU2LWJhNWUtYWQ0NDQzMzIyMjI3IiwidXNlcm5hbWUiOiJraXJ1YmVsZGVzcyJ9.sDLsuOK3OLX2MEJGc8sBaE1amjeZrWt81iCjbPmf96E'
+                    center={mapCenter}
+                    zoom={userLocation ? 15 : 12} // Zoom in closer when user location is available
+                    style="basic"
+                    className="w-full h-full rounded-lg"
+                  >
+                    {/* User location marker */}
+                    {userLocation && (
+                      <MapMarker
+                        id="user-location"
+                        lngLat={[userLocation.lng, userLocation.lat]}
+                        color="#3B82F6"
+                        onClick={() => console.log("User location clicked")}
+                      />
+                    )}
+                    
+                    {/* Route polyline - show the route path when directions are available */}
+                    {validDirections.length > 1 && (
+                      <MapPolyline
+                        id="route-path"
+                        coordinates={validDirections}
+                        color="#EF4444"
+                        width={5}
+                      />
+                    )}
+                    
+                    {/* Erteb location markers */}
+                    {ERTEB_LOCATIONS.map((location) => (
+                      <MapMarker
+                        key={location.id}
+                        id={`erteb-${location.id}`}
+                        lngLat={[location.lng, location.lat]}
+                        color={nearestErteb?.location.id === location.id ? "#10B981" : "#EF4444"}
+                        onClick={() => {
+                          console.log(`${location.name} clicked`);
+                          if (userLocation) {
+                            // Get directions when an Erteb location is clicked
+                            const clickedErteb = findNearestErteb(location.lat, location.lng);
+                            setNearestErteb(clickedErteb);
+                            getDirections();
+                          }
+                        }}
+                      />
+                    ))}
+                  </GebetaMap>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
