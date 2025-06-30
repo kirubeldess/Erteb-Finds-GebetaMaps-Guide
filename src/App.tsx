@@ -1,483 +1,668 @@
-// "use client"
+"use client"
 
-// import { useState } from "react"
-// import { Button } from "@/components/ui/button"
-// import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-// import { Input } from "@/components/ui/input"
-// import { Badge } from "@/components/ui/badge"
-// import { MapPin, Navigation, Clock, Route } from "lucide-react"
-// import { Alert, AlertDescription } from "@/components/ui/alert"
-// import { GebetaMap, MapMarker, MapPolyline } from "@gebeta/tiles"
+import { useState, useEffect } from "react"
+import { GebetaMap, MapMarker } from "@gebeta/tiles"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { MapPin, Navigation, Loader2, AlertCircle, Crosshair, Map, X } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { RouteDisplay } from "@/components/route-display"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 
-// // Sample Erteb spots data - replace with your actual data
-// const ERTEB_SPOTS = [
-//   {
-//     id: 1,
-//     name: "Erteb Central",
-//     address: "Bole, Addis Ababa",
-//     lat: 8.9806,
-//     lng: 38.7578,
-//     phone: "+251-11-123-4567",
-//     hours: "8:00 AM - 10:00 PM",
-//     services: ["Coffee", "Pastries", "WiFi"],
-//   },
-//   {
-//     id: 2,
-//     name: "Erteb Piazza",
-//     address: "Piazza, Addis Ababa",
-//     lat: 9.0348,
-//     lng: 38.7497,
-//     phone: "+251-11-234-5678",
-//     hours: "9:00 AM - 9:00 PM",
-//     services: ["Coffee", "Meals", "Meeting Room"],
-//   },
-//   {
-//     id: 3,
-//     name: "Erteb Merkato",
-//     address: "Merkato, Addis Ababa",
-//     lat: 9.0065,
-//     lng: 38.7221,
-//     phone: "+251-11-345-6789",
-//     hours: "7:00 AM - 11:00 PM",
-//     services: ["Coffee", "Quick Bites", "Takeaway"],
-//   },
-//   {
-//     id: 4,
-//     name: "Erteb CMC",
-//     address: "CMC, Addis Ababa",
-//     lat: 8.995,
-//     lng: 38.789,
-//     phone: "+251-11-456-7890",
-//     hours: "8:30 AM - 9:30 PM",
-//     services: ["Coffee", "Workspace", "Printing"],
-//   },
-//   {
-//     id: 5,
-//     name: "Erteb Kazanchis",
-//     address: "Kazanchis, Addis Ababa",
-//     lat: 9.0234,
-//     lng: 38.7612,
-//     phone: "+251-11-567-8901",
-//     hours: "9:00 AM - 10:00 PM",
-//     services: ["Coffee", "Desserts", "Events"],
-//   },
-// ]
+// Mock erteb locations in Addis Ababa area
+const ERTEB_LOCATIONS = [
+  { id: 1, name: "Erteb House Bole", lat: 8.9806, lng: 38.7578, address: "Bole Road, Addis Ababa" },
+  { id: 2, name: "Erteb House Piazza", lat: 9.0348, lng: 38.7497, address: "Piazza, Addis Ababa" },
+  { id: 3, name: "Erteb House Merkato", lat: 9.0092, lng: 38.7441, address: "Merkato, Addis Ababa" },
+  { id: 4, name: "Erteb House CMC", lat: 8.9955, lng: 38.7614, address: "CMC, Addis Ababa" },
+  { id: 5, name: "Erteb House Kazanchis", lat: 9.0157, lng: 38.7614, address: "Kazanchis, Addis Ababa" },
+]
 
-// interface UserLocation {
-//   lat: number
-//   lng: number
-// }
+interface UserLocation {
+  lat: number
+  lng: number
+  accuracy?: number
+}
 
-// interface ErtebSpotWithDistance {
-//   id: number
-//   name: string
-//   address: string
-//   lat: number
-//   lng: number
-//   phone: string
-//   hours: string
-//   services: string[]
-//   distance?: number
-// }
+interface NearestErteb {
+  location: (typeof ERTEB_LOCATIONS)[0]
+  distance: number
+}
 
-// interface RouteData {
-//   totalDistance: number
-//   timetaken: number
-//   direction: [number, number][]
-// }
+// Add CSS for pulsing animation
+const pulseAnimation = `
+  @keyframes pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+    }
+    70% {
+      box-shadow: 0 0 0 15px rgba(59, 130, 246, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+    }
+  }
+`;
 
-// export default function ErtebFinder() {
-//   const [userLocation, setUserLocation] = useState<UserLocation | null>(null)
-//   const [nearestSpots, setNearestSpots] = useState<ErtebSpotWithDistance[]>([])
-//   const [selectedSpot, setSelectedSpot] = useState<ErtebSpotWithDistance | null>(null)
-//   const [routeData, setRouteData] = useState<RouteData | null>(null)
-//   const [loading, setLoading] = useState(false)
-//   const [error, setError] = useState<string | null>(null)
-//   const [showMap, setShowMap] = useState(false)
-//   const apiKey = import.meta.env.VITE_GEBETA_API_KEY
+// Example locations in Addis Ababa
+const EXAMPLE_LOCATIONS = [
+  { name: "Bole Area", lat: 8.9806, lng: 38.7578 },
+  { name: "Piazza", lat: 9.0348, lng: 38.7497 },
+  { name: "Merkato", lat: 9.0092, lng: 38.7441 },
+  { name: "Meskel Square", lat: 9.0113, lng: 38.7617 },
+];
 
-//   // Calculate distance between two points using Haversine formula
-//   const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
-//     const R = 6371 // Earth's radius in kilometers
-//     const dLat = ((lat2 - lat1) * Math.PI) / 180
-//     const dLng = ((lng2 - lng1) * Math.PI) / 180
-//     const a =
-//       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-//       Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) * Math.sin(dLng / 2)
-//     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-//     return R * c
-//   }
+export default function ErtebFinder() {
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(null)
+  const [nearestErteb, setNearestErteb] = useState<NearestErteb | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [mapCenter, setMapCenter] = useState<[number, number]>([38.7578, 8.9806]) // Default to Addis Ababa
+  const [routeData, setRouteData] = useState<any>(null)
+  const [watchId, setWatchId] = useState<number | null>(null)
+  const [isWatching, setIsWatching] = useState(false)
 
-//   // Find nearest Erteb spots using distance calculation
-//   const findNearestSpots = (location: UserLocation) => {
-//     const spotsWithDistance = ERTEB_SPOTS.map((spot) => ({
-//       ...spot,
-//       distance: calculateDistance(location.lat, location.lng, spot.lat, spot.lng),
-//     }))
+  // Set location manually
+  const [showManualInput, setShowManualInput] = useState(false)
+  const [manualLat, setManualLat] = useState("")
+  const [manualLng, setManualLng] = useState("")
 
-//     // Sort by distance and take top 5
-//     const sorted = spotsWithDistance.sort((a, b) => a.distance! - b.distance!).slice(0, 5)
-//     setNearestSpots(sorted)
-//   }
+  // Calculate distance between two points using Haversine formula
+  const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    const R = 6371 // Earth's radius in kilometers
+    const dLat = ((lat2 - lat1) * Math.PI) / 180
+    const dLng = ((lng2 - lng1) * Math.PI) / 180
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) * Math.sin(dLng / 2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return R * c
+  }
 
-//   const handleGetStarted = () => {
-//     setLoading(true);
-//     // Get user's location
-//     if (navigator.geolocation) {
-//       navigator.geolocation.getCurrentPosition(
-//         (position) => {
-//           const location = {
-//             lat: position.coords.latitude,
-//             lng: position.coords.longitude
-//           };
-//           setUserLocation(location);
-//           findNearestSpots(location);
-//           setShowMap(true);
-//           setLoading(false);
-//         },
-//         (error) => {
-//           console.error("Error getting location:", error);
-//           // Default to Addis Ababa if location access is denied
-//           const defaultLocation = { lat: 8.9806, lng: 38.7578 };
-//           setUserLocation(defaultLocation);
-//           findNearestSpots(defaultLocation);
-//           setShowMap(true);
-//           setLoading(false);
-//         }
-//       );
-//     } else {
-//       // Default to Addis Ababa if geolocation is not supported
-//       const defaultLocation = { lat: 8.9806, lng: 38.7578 };
-//       setUserLocation(defaultLocation);
-//       findNearestSpots(defaultLocation);
-//       setShowMap(true);
-//       setLoading(false);
-//     }
-//   };
+  // Find nearest erteb location
+  const findNearestErteb = (userLat: number, userLng: number): NearestErteb => {
+    let nearest = ERTEB_LOCATIONS[0]
+    let minDistance = calculateDistance(userLat, userLng, nearest.lat, nearest.lng)
 
-//   // Get directions to selected spot using Directions API
-//   const getDirections = async (spot: ErtebSpotWithDistance) => {
-//     if (!userLocation || !apiKey) {
-//       setError("Please enter your API key and enable location services.")
-//       return
-//     }
+    ERTEB_LOCATIONS.forEach((location) => {
+      const distance = calculateDistance(userLat, userLng, location.lat, location.lng)
+      if (distance < minDistance) {
+        minDistance = distance
+        nearest = location
+      }
+    })
 
-//     setLoading(true)
-//     setError(null)
+    return { location: nearest, distance: minDistance }
+  }
 
-//     try {
-//       const response = await fetch(
-//         `https://mapapi.gebeta.app/api/route/direction/?origin=${userLocation.lat},${userLocation.lng}&destination=${spot.lat},${spot.lng}&apiKey=${apiKey}`,
-//       )
+  // Get user's current location
+  const getCurrentLocation = () => {
+    setIsLoading(true)
+    setError(null)
 
-//       if (!response.ok) {
-//         throw new Error("Failed to get directions")
-//       }
+    if (!navigator.geolocation) {
+      setError("Geolocation is not supported by this browser.")
+      setIsLoading(false)
+      return
+    }
 
-//       const data = await response.json()
+    // Clear any existing watch
+    if (watchId !== null) {
+      stopWatchingLocation()
+    }
 
-//       if (data.msg === "Ok") {
-//         setRouteData({
-//           totalDistance: data.totalDistance,
-//           timetaken: data.timetaken,
-//           direction: data.direction,
-//         })
-//         setSelectedSpot(spot)
-//       } else {
-//         setError("No route found to this location.")
-//       }
-//     } catch (err) {
-//       setError("Failed to get directions. Please check your API key and try again.")
-//     } finally {
-//       setLoading(false)
-//     }
-//   }
+    // Force clear any cached positions first
+    navigator.geolocation.clearWatch(navigator.geolocation.watchPosition(() => {}))
 
-//   return (
-//     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-//       <div className="max-w-6xl mx-auto">
-//         <div className="text-center mb-8">
-//           <h1 className="text-4xl font-bold text-gray-900 mb-2">Erteb Spot Finder & Route Optimizer</h1>
-//           <p className="text-gray-600">Discover, navigate, and optimize your visits to Erteb locations</p>
-//         </div>
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude, accuracy } = position.coords
+        console.log(`Location details:`, position.coords)
+        
+        const userPos = { 
+          lat: latitude, 
+          lng: longitude,
+          accuracy: accuracy
+        }
 
-//         {!showMap ? (
-//           <Card className="mb-6">
-//             <CardHeader>
-//               <CardTitle>Get Started</CardTitle>
-//               <CardDescription>Click the button below to find Erteb spots near you</CardDescription>
-//             </CardHeader>
-//             <CardContent>
-//               <Button 
-//                 onClick={handleGetStarted}
-//                 className="bg-blue-600 hover:bg-blue-700 w-full"
-//                 disabled={loading}
-//               >
-//                 {loading ? "Finding your location..." : "Find Erteb Spots Near Me"}
-//               </Button>
-//             </CardContent>
-//           </Card>
-//         ) : (
-//           <>
-//             {/* Map Display - Always visible when showMap is true */}
-//             <Card className="mb-6">
-//               <CardHeader>
-//                 <CardTitle className="flex items-center gap-2">
-//                   <MapPin className="w-5 h-5 text-blue-600" />
-//                   Erteb Map
-//                 </CardTitle>
-//                 <CardDescription>View Erteb spots and your location</CardDescription>
-//               </CardHeader>
-//               <CardContent>
-//                 <div className="h-96 rounded-lg overflow-hidden">
-//                   <GebetaMap
-//                     apiKey={apiKey}
-//                     center={[userLocation?.lng || 38.7578, userLocation?.lat || 8.9806]}
-//                     zoom={12}
-//                     style={"basic"}
-//                   >
-//                     {/* User location marker */}
-//                     <MapMarker
-//                       id="user-location"
-//                       lngLat={[userLocation?.lng || 38.7578, userLocation?.lat || 8.9806]}
-//                       color="#22C55E"
-//                       onClick={() => console.log("Your location clicked!")}
-//                     />
+        setUserLocation(userPos)
+        setMapCenter([longitude, latitude])
 
-//                     {/* Erteb spot markers */}
-//                     {nearestSpots.map((spot, index) => (
-//                       <MapMarker
-//                         key={spot.id}
-//                         id={`spot-${spot.id}`}
-//                         lngLat={[spot.lng, spot.lat]}
-//                         color={index === 0 ? "#EF4444" : "#3B82F6"}
-//                         onClick={() => {
-//                           console.log(`${spot.name} clicked!`)
-//                           getDirections(spot)
-//                         }}
-//                       />
-//                     ))}
+        // Find nearest erteb
+        const nearest = findNearestErteb(latitude, longitude)
+        setNearestErteb(nearest)
 
-//                     {/* Route polyline - show the actual path when directions are available */}
-//                     {selectedSpot && routeData && (
-//                       <MapPolyline
-//                         id="route-path"
-//                         coordinates={routeData.direction.map(([lng, lat]) => [lng, lat])}
-//                         color="#EF4444"
-//                         width={4}
-//                       />
-//                     )}
-//                   </GebetaMap>
-//                 </div>
+        setIsLoading(false)
+      },
+      (error) => {
+        let errorMessage = "Unable to retrieve your location. "
+        
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage += "Please allow location access in your browser settings."
+            break
+          case error.POSITION_UNAVAILABLE:
+            errorMessage += "Location information is unavailable."
+            break
+          case error.TIMEOUT:
+            errorMessage += "Request timed out. Please try again."
+            break
+          default:
+            errorMessage += "Please check your device settings."
+        }
+        
+        setError(errorMessage)
+        setIsLoading(false)
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 30000, // Longer timeout to get better accuracy
+        maximumAge: 0, // Don't use cached position
+      },
+    )
+  }
 
-//                 <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-//                   <div className="flex items-center gap-2">
-//                     <div className="w-4 h-4 bg-green-500 rounded-full"></div>
-//                     <span className="text-sm text-gray-600">Your Location</span>
-//                   </div>
-//                   <div className="flex items-center gap-2">
-//                     <div className="w-4 h-4 bg-red-500 rounded-full"></div>
-//                     <span className="text-sm text-gray-600">Nearest Erteb Spot</span>
-//                   </div>
-//                   <div className="flex items-center gap-2">
-//                     <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
-//                     <span className="text-sm text-gray-600">Other Erteb Spots</span>
-//                   </div>
-//                   <div className="text-sm text-gray-600">Click any marker to get directions</div>
-//                 </div>
-//               </CardContent>
-//             </Card>
-            
-//             {/* User Location Display */}
-//             {userLocation && (
-//               <Card className="mb-6">
-//                 <CardHeader>
-//                   <CardTitle className="flex items-center gap-2">
-//                     <Navigation className="w-5 h-5 text-green-600" />
-//                     Your Location
-//                   </CardTitle>
-//                 </CardHeader>
-//                 <CardContent>
-//                   <p className="text-gray-600">
-//                     Latitude: {userLocation.lat.toFixed(6)}, Longitude: {userLocation.lng.toFixed(6)}
-//                   </p>
-//                 </CardContent>
-//               </Card>
-//             )}
+  // Set location manually
+  const setManualLocation = () => {
+    const lat = parseFloat(manualLat)
+    const lng = parseFloat(manualLng)
+    
+    if (isNaN(lat) || isNaN(lng)) {
+      setError("Please enter valid coordinates")
+      return
+    }
+    
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      setError("Coordinates out of valid range")
+      return
+    }
+    
+    const userPos = { 
+      lat, 
+      lng,
+      accuracy: 10 // Assuming high accuracy for manual input
+    }
 
-//             {/* Nearest Spots */}
-//             {nearestSpots.length > 0 && (
-//               <Card className="mb-6">
-//                 <CardHeader>
-//                   <CardTitle className="flex items-center gap-2">
-//                     <MapPin className="w-5 h-5 text-blue-600" />
-//                     Nearest Erteb Spots
-//                   </CardTitle>
-//                   <CardDescription>Sorted by straight-line distance</CardDescription>
-//                 </CardHeader>
-//                 <CardContent>
-//                   <div className="space-y-4">
-//                     {nearestSpots.map((spot, index) => (
-//                       <div
-//                         key={spot.id}
-//                         className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-//                       >
-//                         <div className="flex-1">
-//                           <div className="flex items-center gap-2 mb-1">
-//                             <h3 className="font-semibold text-gray-900">{spot.name}</h3>
-//                             <Badge variant="secondary">#{index + 1}</Badge>
-//                           </div>
-//                           <p className="text-gray-600 text-sm mb-1">{spot.address}</p>
-//                           <p className="text-gray-500 text-xs mb-1">
-//                             {spot.phone} • {spot.hours}
-//                           </p>
-//                           <div className="flex gap-1 mb-2">
-//                             {spot.services.map((service) => (
-//                               <Badge key={service} variant="outline" className="text-xs">
-//                                 {service}
-//                               </Badge>
-//                             ))}
-//                           </div>
-//                           <div className="flex gap-4 text-sm">
-//                             <span className="text-blue-600 font-medium">{spot.distance?.toFixed(2)} km away</span>
-//                           </div>
-//                         </div>
-//                         <Button
-//                           onClick={() => getDirections(spot)}
-//                           disabled={loading}
-//                           size="sm"
-//                           className="bg-green-600 hover:bg-green-700"
-//                         >
-//                           <Route className="w-4 h-4 mr-1" />
-//                           Get Directions
-//                         </Button>
-//                       </div>
-//                     ))}
-//                   </div>
-//                 </CardContent>
-//               </Card>
-//             )}
+    setUserLocation(userPos)
+    setMapCenter([lng, lat])
 
-//             {/* Route Information */}
-//             {selectedSpot && routeData && (
-//               <Card className="mt-6">
-//                 <CardHeader>
-//                   <CardTitle className="flex items-center gap-2">
-//                     <Route className="w-5 h-5 text-green-600" />
-//                     Route to {selectedSpot.name}
-//                   </CardTitle>
-//                 </CardHeader>
-//                 <CardContent>
-//                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-//                     <div className="text-center p-4 bg-blue-50 rounded-lg">
-//                       <div className="text-2xl font-bold text-blue-600">{routeData.totalDistance.toFixed(1)} km</div>
-//                       <div className="text-sm text-gray-600">Distance</div>
-//                     </div>
-//                     <div className="text-center p-4 bg-green-50 rounded-lg">
-//                       <div className="text-2xl font-bold text-green-600 flex items-center justify-center gap-1">
-//                         <Clock className="w-5 h-5" />
-//                         {Math.round(routeData.timetaken / 60)} min
-//                       </div>
-//                       <div className="text-sm text-gray-600">Travel Time</div>
-//                     </div>
-//                     <div className="text-center p-4 bg-purple-50 rounded-lg">
-//                       <div className="text-2xl font-bold text-purple-600">{routeData.direction.length}</div>
-//                       <div className="text-sm text-gray-600">Route Points</div>
-//                     </div>
-//                   </div>
+    // Find nearest erteb
+    const nearest = findNearestErteb(lat, lng)
+    setNearestErteb(nearest)
+    
+    setShowManualInput(false)
+    setError(null)
+  }
 
-//                   <div className="bg-gray-50 p-4 rounded-lg">
-//                     <h4 className="font-semibold mb-2">Destination Details:</h4>
-//                     <p className="text-sm text-gray-600 mb-1">📍 {selectedSpot.address}</p>
-//                     <p className="text-sm text-gray-600 mb-1">📞 {selectedSpot.phone}</p>
-//                     <p className="text-sm text-gray-600 mb-1">🕒 {selectedSpot.hours}</p>
-//                     <div className="flex gap-1 mt-2">
-//                       {selectedSpot.services.map((service) => (
-//                         <Badge key={service} variant="outline" className="text-xs">
-//                           {service}
-//                         </Badge>
-//                       ))}
-//                     </div>
-//                   </div>
-//                 </CardContent>
-//               </Card>
-//             )}
-//           </>
-//         )}
+  // Start watching user's location
+  const startWatchingLocation = () => {
+    if (!navigator.geolocation) {
+      setError("Geolocation is not supported by this browser.")
+      return
+    }
+    
+    // Clear any existing watch
+    if (watchId !== null) {
+      stopWatchingLocation()
+    }
+    
+    try {
+      const id = navigator.geolocation.watchPosition(
+        (position) => {
+          const { latitude, longitude, accuracy } = position.coords
+          console.log(`Updated location - Accuracy: ${accuracy} meters`)
+          
+          const userPos = { 
+            lat: latitude, 
+            lng: longitude,
+            accuracy: accuracy
+          }
+          
+          setUserLocation(userPos)
+          setMapCenter([longitude, latitude])
+          
+          // Find nearest erteb
+          const nearest = findNearestErteb(latitude, longitude)
+          setNearestErteb(nearest)
+          
+          setIsWatching(true)
+          setError(null)
+        },
+        (error) => {
+          let errorMessage = "Unable to track your location. "
+          
+          switch(error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage += "Please allow location access in your browser settings."
+              break
+            case error.POSITION_UNAVAILABLE:
+              errorMessage += "Location information is unavailable."
+              break
+            case error.TIMEOUT:
+              errorMessage += "Request timed out. Please try again."
+              break
+            default:
+              errorMessage += "Please check your device settings."
+          }
+          
+          setError(errorMessage)
+          stopWatchingLocation()
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        }
+      )
+      
+      setWatchId(id)
+    } catch (err) {
+      console.error("Error starting location watch:", err)
+      setError("Failed to start location tracking.")
+    }
+  }
+  
+  // Stop watching user's location
+  const stopWatchingLocation = () => {
+    if (watchId !== null) {
+      navigator.geolocation.clearWatch(watchId)
+      setWatchId(null)
+      setIsWatching(false)
+    }
+  }
+  
+  // Clean up the watch when component unmounts
+  useEffect(() => {
+    return () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId)
+      }
+    }
+  }, [watchId])
 
-//         {/* Instructions - only show when no data */}
-//         {nearestSpots.length === 0 && !loading && showMap && (
-//           <Card>
-//             <CardHeader>
-//               <CardTitle>How to Use</CardTitle>
-//             </CardHeader>
-//             <CardContent>
-//               <div className="space-y-4">
-//                 <h4 className="font-semibold mb-2">🔍 Find Nearest Erteb Spots</h4>
-//                 <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
-//                   <li>Click on any Erteb spot to see more details</li>
-//                   <li>View the sorted list of nearest spots with distances</li>
-//                   <li>Click "Get Directions" for detailed turn-by-turn navigation</li>
-//                   <li>Click any map marker to get directions to that spot</li>
-//                 </ol>
-//               </div>
-//             </CardContent>
-//           </Card>
-//         )}
+  // Get directions to nearest erteb
+  const getDirections = async () => {
+    if (!userLocation || !nearestErteb) return
 
-//         {/* Loading indicator */}
-//         {loading && (
-//           <div className="flex justify-center my-8">
-//             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-//           </div>
-//         )}
-//       </div>
-//     </div>
-//   )
-// }
+    setIsLoading(true)
+    setError(null)
 
+    try {
+      const apiKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb21wYW55bmFtZSI6IktpcnViZWwiLCJkZXNjcmlwdGlvbiI6IjVkMWY2MjQyLTljNTYtNDE1Yy05ZWNkLWQ5Y2QzYWNlNDNhYyIsImlkIjoiNzdkYmVhZWEtMDJiOC00MGU2LWJhNWUtYWQ0NDQzMzIyMjI3IiwidXNlcm5hbWUiOiJraXJ1YmVsZGVzcyJ9.sDLsuOK3OLX2MEJGc8sBaE1amjeZrWt81iCjbPmf96E'
 
+      const response = await fetch(
+        `https://mapapi.gebeta.app/api/route/direction/?origin=${userLocation.lat},${userLocation.lng}&destination=${nearestErteb.location.lat},${nearestErteb.location.lng}&instructions=1&apiKey=${apiKey}`,
+      )
 
+      const data = await response.json()
 
+      if (response.ok && !data.error) {
+        setRouteData(data)
+        console.log("Route data:", data)
+      } else {
+        const errorMessage = data.error?.message || "Unable to get directions. Please try again."
+        setError(errorMessage)
+        console.error("API Error:", data.error)
+      }
+    } catch (err) {
+      setError("Network error. Please check your connection.")
+      console.error("Network error:", err)
+    }
+    setIsLoading(false)
+  }
 
+  // Update zoom level when user location changes
+  useEffect(() => {
+    if (userLocation) {
+      // Zoom in closer to user's location for better accuracy
+      setMapCenter([userLocation.lng, userLocation.lat]);
+    }
+  }, [userLocation]);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- 
-
-
-import { GebetaMap, MapMarker } from '@gebeta/tiles';
-
-export default function App() {
   return (
-    <div style={{ width: '80%', height: '100vh' }}>
-      <GebetaMap
-        apiKey="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb21wYW55bmFtZSI6IktpcnViZWwiLCJkZXNjcmlwdGlvbiI6IjVkMWY2MjQyLTljNTYtNDE1Yy05ZWNkLWQ5Y2QzYWNlNDNhYyIsImlkIjoiNzdkYmVhZWEtMDJiOC00MGU2LWJhNWUtYWQ0NDQzMzIyMjI3IiwidXNlcm5hbWUiOiJraXJ1YmVsZGVzcyJ9.sDLsuOK3OLX2MEJGc8sBaE1amjeZrWt81iCjbPmf96E"
-        center={[38.7578, 8.9806]}
-        zoom={12}
-        style="basic"
-      >
-        <MapMarker
-          id="marker-1"
-          lngLat={[38.7578, 8.9806]}
-          color="#FF0000"
-          onClick={() => console.log('Marker clicked!')}
-        />
-      </GebetaMap>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50">
+      {/* Add style tag for pulse animation */}
+      <style>{pulseAnimation}</style>
+      
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="bg-green-600 p-2 rounded-lg">
+                <MapPin className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Erteb Finder</h1>
+                <p className="text-sm text-gray-600">Find the nearest erteb house</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Control Panel */}
+          <div className="lg:col-span-1 space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Navigation className="h-5 w-5" />
+                  <span>Find Nearest Erteb</span>
+                  {isWatching && (
+                    <Badge variant="outline" className="ml-2 bg-green-50 text-green-700 border-green-200">
+                      <Crosshair className="w-3 h-3 mr-1" />
+                      Live Tracking
+                    </Badge>
+                  )}
+                </CardTitle>
+                <CardDescription>Locate your position and find the closest erteb house</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button 
+                    onClick={getCurrentLocation} 
+                    disabled={isLoading} 
+                    className="w-full" 
+                    size="lg"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Finding Location...
+                      </>
+                    ) : (
+                      <>
+                        <MapPin className="mr-2 h-4 w-4" />
+                        Find My Location
+                      </>
+                    )}
+                  </Button>
+                  
+                  <Button 
+                    onClick={isWatching ? stopWatchingLocation : startWatchingLocation}
+                    disabled={isLoading}
+                    className={`w-full ${isWatching ? "bg-amber-600 hover:bg-amber-700" : "bg-green-600 hover:bg-green-700"}`}
+                    size="lg"
+                  >
+                    {isWatching ? (
+                      <>
+                        <Crosshair className="mr-2 h-4 w-4" />
+                        Stop Tracking
+                      </>
+                    ) : (
+                      <>
+                        <Crosshair className="mr-2 h-4 w-4" />
+                        Live Tracking
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Manual location input toggle */}
+                <div className="flex justify-center">
+                  <Button 
+                    variant="link" 
+                    onClick={() => setShowManualInput(!showManualInput)}
+                    className="text-sm"
+                  >
+                    {showManualInput ? (
+                      <>
+                        <X className="h-3 w-3 mr-1" />
+                        Hide manual input
+                      </>
+                    ) : (
+                      <>
+                        <Map className="h-3 w-3 mr-1" />
+                        Enter coordinates manually
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Manual location input form */}
+                {showManualInput && (
+                  <div className="p-3 border rounded-md bg-gray-50">
+                    <h4 className="text-sm font-medium mb-2">Enter Your Coordinates</h4>
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <div>
+                        <label htmlFor="latitude" className="text-xs text-gray-500 mb-1 block">Latitude</label>
+                        <Input 
+                          id="latitude"
+                          type="text" 
+                          placeholder="e.g. 9.0234" 
+                          value={manualLat}
+                          onChange={(e) => setManualLat(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="longitude" className="text-xs text-gray-500 mb-1 block">Longitude</label>
+                        <Input 
+                          id="longitude"
+                          type="text" 
+                          placeholder="e.g. 38.7612" 
+                          value={manualLng}
+                          onChange={(e) => setManualLng(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <Button 
+                      onClick={setManualLocation} 
+                      className="w-full bg-blue-600 hover:bg-blue-700 mb-2"
+                      size="sm"
+                    >
+                      <Map className="mr-2 h-4 w-4" />
+                      Set Location
+                    </Button>
+                    
+                    {/* Example locations */}
+                    <div className="mt-3">
+                      <h5 className="text-xs font-medium text-gray-500 mb-1">Try these locations in Addis Ababa:</h5>
+                      <div className="grid grid-cols-2 gap-1">
+                        {EXAMPLE_LOCATIONS.map((loc, index) => (
+                          <Button 
+                            key={index}
+                            variant="outline" 
+                            size="sm"
+                            className="text-xs justify-start overflow-hidden"
+                            onClick={() => {
+                              setManualLat(loc.lat.toString());
+                              setManualLng(loc.lng.toString());
+                            }}
+                          >
+                            <MapPin className="h-3 w-3 mr-1" />
+                            {loc.name}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+
+                {userLocation && (
+                  <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                    <h3 className="font-semibold text-green-800 mb-2">Your Location</h3>
+                    <p className="text-sm text-green-700">
+                      Lat: {userLocation.lat.toFixed(6)}
+                      <br />
+                      Lng: {userLocation.lng.toFixed(6)}
+                      {userLocation.accuracy && (
+                        <>
+                          <br />
+                          <div className="mt-2">
+                            <div className="flex items-center justify-between">
+                              <span>Accuracy:</span>
+                              <span 
+                                className={`font-medium ${
+                                  userLocation.accuracy < 20 
+                                    ? "text-green-600" 
+                                    : userLocation.accuracy < 100 
+                                    ? "text-amber-600"
+                                    : "text-red-600"
+                                }`}
+                              >
+                                {userLocation.accuracy.toFixed(1)} meters
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+                              <div 
+                                className={`h-2 rounded-full ${
+                                  userLocation.accuracy < 20 
+                                    ? "bg-green-600" 
+                                    : userLocation.accuracy < 100 
+                                    ? "bg-amber-600"
+                                    : "bg-red-600"
+                                }`}
+                                style={{ 
+                                  width: `${Math.max(0, Math.min(100, 100 - (userLocation.accuracy / 2)))}%` 
+                                }}
+                              ></div>
+                            </div>
+                            {userLocation.accuracy > 100 && (
+                              <p className="text-xs text-red-600 mt-1 flex items-center">
+                                <AlertCircle className="w-3 h-3 mr-1" />
+                                Low accuracy - Consider refreshing your location
+                              </p>
+                            )}
+                            {isWatching && (
+                              <p className="text-xs text-green-600 mt-1 flex items-center">
+                                <Crosshair className="w-3 h-3 mr-1" />
+                                Live tracking enabled - Location updates automatically
+                              </p>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                )}
+
+                {nearestErteb && (
+                  <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <h3 className="font-semibold text-blue-800 mb-2">Nearest Erteb House</h3>
+                    <p className="font-medium text-blue-900">{nearestErteb.location.name}</p>
+                    <p className="text-sm text-blue-700 mb-2">{nearestErteb.location.address}</p>
+                    <p className="text-sm text-blue-600">Distance: {nearestErteb.distance.toFixed(2)} km</p>
+                    <Button
+                      onClick={getDirections}
+                      disabled={isLoading}
+                      className="w-full mt-3 bg-transparent"
+                      variant="outline"
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Getting Directions...
+                        </>
+                      ) : (
+                        <>
+                          <Navigation className="mr-2 h-4 w-4" />
+                          Get Directions
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+
+                {routeData && nearestErteb && <RouteDisplay routeData={routeData} nearestErteb={nearestErteb} />}
+              </CardContent>
+            </Card>
+
+            {/* All Erteb Locations */}
+            <Card>
+              <CardHeader>
+                <CardTitle>All Erteb Houses</CardTitle>
+                <CardDescription>Available locations in Addis Ababa</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {ERTEB_LOCATIONS.map((location) => (
+                    <div
+                      key={location.id}
+                      className={`p-3 rounded-lg border ${
+                        nearestErteb?.location.id === location.id
+                          ? "bg-green-50 border-green-300"
+                          : "bg-gray-50 border-gray-200"
+                      }`}
+                    >
+                      <p className="font-medium text-gray-900">{location.name}</p>
+                      <p className="text-sm text-gray-600">{location.address}</p>
+                      {nearestErteb?.location.id === location.id && (
+                        <span className="inline-block mt-1 px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                          Nearest
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Map */}
+          <div className="lg:col-span-2">
+            <Card className="h-[600px]">
+              <CardContent className="p-0 h-full">
+                <GebetaMap
+                  apiKey='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb21wYW55bmFtZSI6IktpcnViZWwiLCJkZXNjcmlwdGlvbiI6IjVkMWY2MjQyLTljNTYtNDE1Yy05ZWNkLWQ5Y2QzYWNlNDNhYyIsImlkIjoiNzdkYmVhZWEtMDJiOC00MGU2LWJhNWUtYWQ0NDQzMzIyMjI3IiwidXNlcm5hbWUiOiJraXJ1YmVsZGVzcyJ9.sDLsuOK3OLX2MEJGc8sBaE1amjeZrWt81iCjbPmf96E'
+                  center={mapCenter}
+                  zoom={userLocation ? 15 : 12} // Zoom in closer when user location is available
+                  style="basic"
+                  className="w-full h-full rounded-lg"
+                >
+                  {/* User location marker - made more prominent */}
+                  {userLocation && (
+                    <>
+                      {/* Pulsing effect for better visibility */}
+                      <div className="absolute z-10" style={{ 
+                        left: '50%', 
+                        top: '50%', 
+                        transform: 'translate(-50%, -50%)',
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                        boxShadow: '0 0 0 rgba(59, 130, 246, 0.6)',
+                        animation: 'pulse 1.5s infinite'
+                      }}></div>
+                      
+                      <MapMarker
+                        id="user-location"
+                        lngLat={[userLocation.lng, userLocation.lat]}
+                        color="#3B82F6"
+                        onClick={() => console.log("User location clicked")}
+                      />
+                    </>
+                  )}
+                  
+                  {/* Note: MapCircle is not available in @gebeta/tiles */}
+                  {/* We display accuracy information in the UI instead */}
+
+                  {/* Erteb location markers */}
+                  {ERTEB_LOCATIONS.map((location) => (
+                    <MapMarker
+                      key={location.id}
+                      id={`erteb-${location.id}`}
+                      lngLat={[location.lng, location.lat]}
+                      color={nearestErteb?.location.id === location.id ? "#10B981" : "#EF4444"}
+                      onClick={() => console.log(`${location.name} clicked`)}
+                    />
+                  ))}
+                </GebetaMap>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
     </div>
-  );
+  )
 }
