@@ -29,30 +29,6 @@ interface NearestErteb {
   location: (typeof ERTEB_LOCATIONS)[0]
   distance: number
 }
-
-// Add CSS for pulsing animation
-const pulseAnimation = `
-  @keyframes pulse {
-    0% {
-      box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
-    }
-    70% {
-      box-shadow: 0 0 0 15px rgba(59, 130, 246, 0);
-    }
-    100% {
-      box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
-    }
-  }
-`;
-
-// Example locations in Addis Ababa
-const EXAMPLE_LOCATIONS = [
-  { name: "Bole Area", lat: 8.9806, lng: 38.7578 },
-  { name: "Piazza", lat: 9.0348, lng: 38.7497 },
-  { name: "Merkato", lat: 9.0092, lng: 38.7441 },
-  { name: "Meskel Square", lat: 9.0113, lng: 38.7617 },
-];
-
 export default function ErtebFinder() {
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null)
   const [nearestErteb, setNearestErteb] = useState<NearestErteb | null>(null)
@@ -62,11 +38,6 @@ export default function ErtebFinder() {
   const [routeData, setRouteData] = useState<any>(null)
   const [watchId, setWatchId] = useState<number | null>(null)
   const [isWatching, setIsWatching] = useState(false)
-
-  // Set location manually
-  const [showManualInput, setShowManualInput] = useState(false)
-  const [manualLat, setManualLat] = useState("")
-  const [manualLng, setManualLng] = useState("")
 
   // Calculate distance between two points using Haversine formula
   const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
@@ -106,14 +77,6 @@ export default function ErtebFinder() {
       setIsLoading(false)
       return
     }
-
-    // Clear any existing watch
-    if (watchId !== null) {
-      stopWatchingLocation()
-    }
-
-    // Force clear any cached positions first
-    navigator.geolocation.clearWatch(navigator.geolocation.watchPosition(() => {}))
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -161,38 +124,6 @@ export default function ErtebFinder() {
         maximumAge: 0, // Don't use cached position
       },
     )
-  }
-
-  // Set location manually
-  const setManualLocation = () => {
-    const lat = parseFloat(manualLat)
-    const lng = parseFloat(manualLng)
-    
-    if (isNaN(lat) || isNaN(lng)) {
-      setError("Please enter valid coordinates")
-      return
-    }
-    
-    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-      setError("Coordinates out of valid range")
-      return
-    }
-    
-    const userPos = { 
-      lat, 
-      lng,
-      accuracy: 10 // Assuming high accuracy for manual input
-    }
-
-    setUserLocation(userPos)
-    setMapCenter([lng, lat])
-
-    // Find nearest erteb
-    const nearest = findNearestErteb(lat, lng)
-    setNearestErteb(nearest)
-    
-    setShowManualInput(false)
-    setError(null)
   }
 
   // Start watching user's location
@@ -312,19 +243,8 @@ export default function ErtebFinder() {
     setIsLoading(false)
   }
 
-  // Update zoom level when user location changes
-  useEffect(() => {
-    if (userLocation) {
-      // Zoom in closer to user's location for better accuracy
-      setMapCenter([userLocation.lng, userLocation.lat]);
-    }
-  }, [userLocation]);
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50">
-      {/* Add style tag for pulse animation */}
-      <style>{pulseAnimation}</style>
-      
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -400,86 +320,6 @@ export default function ErtebFinder() {
                     )}
                   </Button>
                 </div>
-
-                {/* Manual location input toggle */}
-                <div className="flex justify-center">
-                  <Button 
-                    variant="link" 
-                    onClick={() => setShowManualInput(!showManualInput)}
-                    className="text-sm"
-                  >
-                    {showManualInput ? (
-                      <>
-                        <X className="h-3 w-3 mr-1" />
-                        Hide manual input
-                      </>
-                    ) : (
-                      <>
-                        <Map className="h-3 w-3 mr-1" />
-                        Enter coordinates manually
-                      </>
-                    )}
-                  </Button>
-                </div>
-
-                {/* Manual location input form */}
-                {showManualInput && (
-                  <div className="p-3 border rounded-md bg-gray-50">
-                    <h4 className="text-sm font-medium mb-2">Enter Your Coordinates</h4>
-                    <div className="grid grid-cols-2 gap-2 mb-2">
-                      <div>
-                        <label htmlFor="latitude" className="text-xs text-gray-500 mb-1 block">Latitude</label>
-                        <Input 
-                          id="latitude"
-                          type="text" 
-                          placeholder="e.g. 9.0234" 
-                          value={manualLat}
-                          onChange={(e) => setManualLat(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="longitude" className="text-xs text-gray-500 mb-1 block">Longitude</label>
-                        <Input 
-                          id="longitude"
-                          type="text" 
-                          placeholder="e.g. 38.7612" 
-                          value={manualLng}
-                          onChange={(e) => setManualLng(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <Button 
-                      onClick={setManualLocation} 
-                      className="w-full bg-blue-600 hover:bg-blue-700 mb-2"
-                      size="sm"
-                    >
-                      <Map className="mr-2 h-4 w-4" />
-                      Set Location
-                    </Button>
-                    
-                    {/* Example locations */}
-                    <div className="mt-3">
-                      <h5 className="text-xs font-medium text-gray-500 mb-1">Try these locations in Addis Ababa:</h5>
-                      <div className="grid grid-cols-2 gap-1">
-                        {EXAMPLE_LOCATIONS.map((loc, index) => (
-                          <Button 
-                            key={index}
-                            variant="outline" 
-                            size="sm"
-                            className="text-xs justify-start overflow-hidden"
-                            onClick={() => {
-                              setManualLat(loc.lat.toString());
-                              setManualLng(loc.lng.toString());
-                            }}
-                          >
-                            <MapPin className="h-3 w-3 mr-1" />
-                            {loc.name}
-                          </Button>
-                        ))}
-                  </div>
-                  </div>
-                  </div>
-                )}
 
                 {error && (
                   <Alert variant="destructive">
