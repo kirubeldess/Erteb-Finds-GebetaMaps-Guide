@@ -228,8 +228,8 @@ export default function ErtebFinder() {
           
           setIsWatching(true)
           setError(null)
-        },
-        (error) => {
+          },
+          (error) => {
           let errorMessage = "Unable to track your location. "
           
           switch(error.code) {
@@ -476,8 +476,8 @@ export default function ErtebFinder() {
                             {loc.name}
                           </Button>
                         ))}
-                      </div>
-                    </div>
+                  </div>
+                  </div>
                   </div>
                 )}
 
@@ -543,7 +543,7 @@ export default function ErtebFinder() {
                         </>
                       )}
                     </p>
-                  </div>
+                        </div>
                 )}
 
                 {nearestErteb && (
@@ -552,7 +552,7 @@ export default function ErtebFinder() {
                     <p className="font-medium text-blue-900">{nearestErteb.location.name}</p>
                     <p className="text-sm text-blue-700 mb-2">{nearestErteb.location.address}</p>
                     <p className="text-sm text-blue-600">Distance: {nearestErteb.distance.toFixed(2)} km</p>
-                    <Button
+                        <Button
                       onClick={getDirections}
                       disabled={isLoading}
                       className="w-full mt-3 bg-transparent"
@@ -569,21 +569,21 @@ export default function ErtebFinder() {
                           Get Directions
                         </>
                       )}
-                    </Button>
+                        </Button>
                   </div>
                 )}
 
                 {routeData && nearestErteb && <RouteDisplay routeData={routeData} nearestErteb={nearestErteb} />}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
             {/* All Erteb Locations */}
             <Card>
-              <CardHeader>
+                <CardHeader>
                 <CardTitle>All Erteb Houses</CardTitle>
                 <CardDescription>Available locations in Addis Ababa</CardDescription>
-              </CardHeader>
-              <CardContent>
+                </CardHeader>
+                <CardContent>
                 <div className="space-y-3">
                   {ERTEB_LOCATIONS.map((location) => (
                     <div
@@ -603,9 +603,9 @@ export default function ErtebFinder() {
                       )}
                     </div>
                   ))}
-                </div>
-              </CardContent>
-            </Card>
+                  </div>
+                </CardContent>
+              </Card>
           </div>
 
           {/* Map */}
@@ -641,9 +641,9 @@ export default function ErtebFinder() {
                         color="#3B82F6"
                         onClick={() => console.log("User location clicked")}
                       />
-                    </>
-                  )}
-                  
+          </>
+        )}
+
                   {/* Note: MapCircle is not available in @gebeta/tiles */}
                   {/* We display accuracy information in the UI instead */}
 
@@ -658,8 +658,8 @@ export default function ErtebFinder() {
                     />
                   ))}
                 </GebetaMap>
-              </CardContent>
-            </Card>
+            </CardContent>
+          </Card>
           </div>
         </div>
       </div>
