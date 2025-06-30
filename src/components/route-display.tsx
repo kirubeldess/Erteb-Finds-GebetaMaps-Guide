@@ -18,13 +18,11 @@ interface RouteDisplayProps {
 export function RouteDisplay({ routeData, nearestErteb }: RouteDisplayProps) {
   if (!routeData) return null
 
-  const { routes } = routeData
-  const route = routes?.[0]
-
-  if (!route) return null
-
-  const { distance, duration, legs } = route
-  const instructions = legs?.[0]?.steps || []
+  // Gebeta API format
+  const { totalDistance, timetaken, direction } = routeData
+  
+  // Check if we have valid route data
+  if (!direction || !Array.isArray(direction)) return null
 
   return (
     <Card>
@@ -35,43 +33,33 @@ export function RouteDisplay({ routeData, nearestErteb }: RouteDisplayProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Badge variant="secondary" className="flex items-center space-x-1">
-              <MapPin className="h-3 w-3" />
-              <span>{(distance / 1000).toFixed(1)} km</span>
-            </Badge>
-            <Badge variant="secondary" className="flex items-center space-x-1">
-              <Clock className="h-3 w-3" />
-              <span>{Math.round(duration / 60)} min</span>
-            </Badge>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-blue-50 p-3 rounded-lg text-center">
+            <div className="text-xl font-bold text-blue-700">
+              {(totalDistance / 1000).toFixed(2)} km
+            </div>
+            <div className="text-sm text-blue-600">Distance</div>
+          </div>
+          <div className="bg-green-50 p-3 rounded-lg text-center">
+            <div className="text-xl font-bold text-green-700 flex items-center justify-center">
+              <Clock className="h-4 w-4 mr-1" />
+              {Math.round(timetaken / 60)} min
+            </div>
+            <div className="text-sm text-green-600">Travel Time</div>
           </div>
         </div>
-
-        {instructions.length > 0 && (
-          <div>
-            <h4 className="font-semibold mb-2">Turn-by-turn directions:</h4>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {instructions.map((step: any, index: number) => (
-                <div key={index} className="flex items-start space-x-3 p-2 bg-gray-50 rounded">
-                  <div className="bg-blue-100 text-blue-800 rounded-full w-6 h-6 flex items-center justify-center text-xs font-semibold">
-                    {index + 1}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-800">{step.maneuver?.instruction || step.name}</p>
-                    {step.distance && (
-                      <p className="text-xs text-gray-500">
-                        {step.distance > 1000
-                          ? `${(step.distance / 1000).toFixed(1)} km`
-                          : `${Math.round(step.distance)} m`}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        
+        <div className="bg-gray-50 p-3 rounded-lg">
+          <h4 className="font-medium mb-2">Destination:</h4>
+          <p className="text-sm text-gray-700 mb-1">
+            <MapPin className="h-3 w-3 inline mr-1" />
+            {nearestErteb.location.address}
+          </p>
+          <p className="text-sm text-gray-700">
+            <Route className="h-3 w-3 inline mr-1" />
+            {direction.length} route points
+          </p>
+        </div>
       </CardContent>
     </Card>
   )

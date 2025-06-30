@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { GebetaMap, MapMarker } from "@gebeta/tiles"
+import { GebetaMap, MapMarker, MapPolyline } from "@gebeta/tiles"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { MapPin, Navigation, Loader2, AlertCircle, Crosshair, Map, X } from "lucide-react"
@@ -17,6 +17,14 @@ const ERTEB_LOCATIONS = [
   { id: 3, name: "Erteb House Merkato", lat: 9.0092, lng: 38.7441, address: "Merkato, Addis Ababa" },
   { id: 4, name: "Erteb House CMC", lat: 8.9955, lng: 38.7614, address: "CMC, Addis Ababa" },
   { id: 5, name: "Erteb House Kazanchis", lat: 9.0157, lng: 38.7614, address: "Kazanchis, Addis Ababa" },
+]
+
+// Common locations in Addis Ababa for testing
+const TEST_LOCATIONS = [
+  { name: "Bole Airport", lat: 8.9778, lng: 38.7989 },
+  { name: "Meskel Square", lat: 9.0113, lng: 38.7617 },
+  { name: "National Museum", lat: 9.0266, lng: 38.7622 },
+  { name: "Entoto Park", lat: 9.0699, lng: 38.7468 },
 ]
 
 interface UserLocation {
@@ -38,6 +46,11 @@ export default function ErtebFinder() {
   const [routeData, setRouteData] = useState<any>(null)
   const [watchId, setWatchId] = useState<number | null>(null)
   const [isWatching, setIsWatching] = useState(false)
+  
+  // Manual coordinate entry
+  const [showManualInput, setShowManualInput] = useState(false)
+  const [manualLat, setManualLat] = useState("")
+  const [manualLng, setManualLng] = useState("")
 
   // Calculate distance between two points using Haversine formula
   const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
@@ -76,6 +89,18 @@ export default function ErtebFinder() {
       setError("Geolocation is not supported by this browser.")
       setIsLoading(false)
       return
+    }
+
+    // Clear any existing watch
+    if (watchId !== null) {
+      stopWatchingLocation()
+    }
+
+    // Clear any cached positions first
+    try {
+      navigator.geolocation.clearWatch(navigator.geolocation.watchPosition(() => {}))
+    } catch (e) {
+      // Ignore errors from this operation
     }
 
     navigator.geolocation.getCurrentPosition(
@@ -222,19 +247,35 @@ export default function ErtebFinder() {
     try {
       const apiKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb21wYW55bmFtZSI6IktpcnViZWwiLCJkZXNjcmlwdGlvbiI6IjVkMWY2MjQyLTljNTYtNDE1Yy05ZWNkLWQ5Y2QzYWNlNDNhYyIsImlkIjoiNzdkYmVhZWEtMDJiOC00MGU2LWJhNWUtYWQ0NDQzMzIyMjI3IiwidXNlcm5hbWUiOiJraXJ1YmVsZGVzcyJ9.sDLsuOK3OLX2MEJGc8sBaE1amjeZrWt81iCjbPmf96E'
 
-      const response = await fetch(
-        `https://mapapi.gebeta.app/api/route/direction/?origin=${userLocation.lat},${userLocation.lng}&destination=${nearestErteb.location.lat},${nearestErteb.location.lng}&instructions=1&apiKey=${apiKey}`,
-      )
+      const url = `https://mapapi.gebeta.app/api/route/direction/?origin=${userLocation.lat},${userLocation.lng}&destination=${nearestErteb.location.lat},${nearestErteb.location.lng}&instructions=1&apiKey=${apiKey}`
+      
+      console.log("Fetching directions from:", url)
 
+      const response = await fetch(url)
       const data = await response.json()
+      
+      console.log("Direction API response:", data)
 
-      if (response.ok && !data.error) {
-        setRouteData(data)
-        console.log("Route data:", data)
+      if (response.ok && data && data.direction) {
+        // Make sure we have the route data in the correct format
+        if (Array.isArray(data.direction) && data.direction.length > 0) {
+          console.log(`Route received with ${data.direction.length} points`)
+          setRouteData(data)
+          
+          // Adjust map to show the entire route
+          if (data.direction.length > 0) {
+            // Get the first point of the route
+            const firstPoint = data.direction[0]
+            setMapCenter([firstPoint[0], firstPoint[1]])
+          }
+        } else {
+          setError("Invalid route data received")
+          console.error("Invalid route data:", data)
+        }
       } else {
         const errorMessage = data.error?.message || "Unable to get directions. Please try again."
         setError(errorMessage)
-        console.error("API Error:", data.error)
+        console.error("API Error:", data.error || data)
       }
     } catch (err) {
       setError("Network error. Please check your connection.")
@@ -242,6 +283,45 @@ export default function ErtebFinder() {
     }
     setIsLoading(false)
   }
+
+  // Set location manually
+  const setManualLocation = () => {
+    const lat = parseFloat(manualLat)
+    const lng = parseFloat(manualLng)
+    
+    if (isNaN(lat) || isNaN(lng)) {
+      setError("Please enter valid coordinates")
+      return
+    }
+    
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      setError("Coordinates out of valid range")
+      return
+    }
+    
+    const userPos = { 
+      lat, 
+      lng,
+      accuracy: 10 // Assuming high accuracy for manual input
+    }
+
+    setUserLocation(userPos)
+    setMapCenter([lng, lat])
+
+    // Find nearest erteb
+    const nearest = findNearestErteb(lat, lng)
+    setNearestErteb(nearest)
+    
+    setError(null)
+  }
+
+  // Update map when user location changes
+  useEffect(() => {
+    if (userLocation) {
+      // Zoom in closer to user's location for better accuracy
+      setMapCenter([userLocation.lng, userLocation.lat])
+    }
+  }, [userLocation])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50">
@@ -319,6 +399,60 @@ export default function ErtebFinder() {
                       </>
                     )}
                   </Button>
+                </div>
+
+                {/* Manual coordinate entry */}
+                <div className="border-t pt-4 mt-4">
+                  <h4 className="text-sm font-medium mb-3">Test with Manual Coordinates</h4>
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <div>
+                      <Input 
+                        type="text" 
+                        placeholder="Latitude" 
+                        value={manualLat}
+                        onChange={(e) => setManualLat(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Input 
+                        type="text" 
+                        placeholder="Longitude" 
+                        value={manualLng}
+                        onChange={(e) => setManualLng(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <Button 
+                    onClick={setManualLocation} 
+                    className="w-full mb-3"
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Map className="mr-2 h-4 w-4" />
+                    Set Test Location
+                  </Button>
+                  
+                  {/* Preset locations */}
+                  <div className="mt-3">
+                    <h5 className="text-xs font-medium text-gray-500 mb-2">Try these locations:</h5>
+                    <div className="grid grid-cols-2 gap-2">
+                      {TEST_LOCATIONS.map((loc, index) => (
+                        <Button 
+                          key={index}
+                          variant="ghost" 
+                          size="sm"
+                          className="text-xs justify-start h-auto py-1"
+                          onClick={() => {
+                            setManualLat(loc.lat.toString());
+                            setManualLng(loc.lng.toString());
+                          }}
+                        >
+                          <MapPin className="h-3 w-3 mr-1 flex-shrink-0" />
+                          <span className="truncate">{loc.name}</span>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
                 {error && (
@@ -459,34 +593,26 @@ export default function ErtebFinder() {
                   style="basic"
                   className="w-full h-full rounded-lg"
                 >
-                  {/* User location marker - made more prominent */}
+                  {/* User location marker */}
                   {userLocation && (
-                    <>
-                      {/* Pulsing effect for better visibility */}
-                      <div className="absolute z-10" style={{ 
-                        left: '50%', 
-                        top: '50%', 
-                        transform: 'translate(-50%, -50%)',
-                        width: '20px',
-                        height: '20px',
-                        borderRadius: '50%',
-                        backgroundColor: 'rgba(59, 130, 246, 0.5)',
-                        boxShadow: '0 0 0 rgba(59, 130, 246, 0.6)',
-                        animation: 'pulse 1.5s infinite'
-                      }}></div>
-                      
-                      <MapMarker
-                        id="user-location"
-                        lngLat={[userLocation.lng, userLocation.lat]}
-                        color="#3B82F6"
-                        onClick={() => console.log("User location clicked")}
-                      />
-          </>
-        )}
-
-                  {/* Note: MapCircle is not available in @gebeta/tiles */}
-                  {/* We display accuracy information in the UI instead */}
-
+                    <MapMarker
+                      id="user-location"
+                      lngLat={[userLocation.lng, userLocation.lat]}
+                      color="#3B82F6"
+                      onClick={() => console.log("User location clicked")}
+                    />
+                  )}
+                  
+                  {/* Route polyline - show the route path when directions are available */}
+                  {routeData && routeData.direction && (
+                    <MapPolyline
+                      id="route-path"
+                      coordinates={routeData.direction.map((point: [number, number]) => point)}
+                      color="#EF4444"
+                      width={4}
+                    />
+                  )}
+                  
                   {/* Erteb location markers */}
                   {ERTEB_LOCATIONS.map((location) => (
                     <MapMarker
